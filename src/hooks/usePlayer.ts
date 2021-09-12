@@ -8,7 +8,7 @@ export type Player = {
     x: number;
     y: number;
   };
-  tetromino: (string | number)[][];
+  tetromino: any[][];
   collided: boolean;
 };
 
