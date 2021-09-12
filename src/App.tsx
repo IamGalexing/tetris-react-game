@@ -1,6 +1,6 @@
 import { StyledTetrisWrapper, StyledTetris } from "./App.styles";
 import { useRef, useState } from "react";
-import { createStage } from "./gameHelpers";
+import { createStage, isColliding } from "./gameHelpers";
 
 //components
 import Stage from "./components/Stage/Stage";
@@ -11,6 +11,7 @@ import StartButton from "./components/StartButton/StartButton";
 import { useInterval } from "./hooks/useInterval";
 import { usePlayer } from "./hooks/usePlayer";
 import { useStage } from "./hooks/useStage";
+import { useGameStatus } from "./hooks/useGameStatus";
 
 const App: React.FC = () => {
   const [dropTime, setDropTime] = useState<null | number>(null);
@@ -18,17 +19,21 @@ const App: React.FC = () => {
 
   const gameArea = useRef<HTMLDivElement>(null);
 
-  const { player, updatePlayerPos, resetPlayer } = usePlayer();
-  const { stage, setStage } = useStage(player, resetPlayer);
+  const { player, updatePlayerPos, resetPlayer, playerRotate } = usePlayer();
+  const { stage, setStage, rowsCleared } = useStage(player, resetPlayer);
+  const { score, setScore, rows, setRows, level, setLevel } =
+    useGameStatus(rowsCleared);
 
   const movePlayer = (dir: number) => {
-    updatePlayerPos({ x: dir, y: 0, collided: false });
+    if (!isColliding(player, stage, { x: dir, y: 0 })) {
+      updatePlayerPos({ x: dir, y: 0, collided: false });
+    }
   };
 
   const keyUp = ({ code }: { code: string }): void => {
     // change the dropdown speed
-    if (code === "ArrowDown") {
-      setDropTime(1000);
+    if (!gameOver && code === "ArrowDown") {
+      setDropTime(1000 / level + 200);
     }
   };
 
@@ -39,24 +44,48 @@ const App: React.FC = () => {
     setStage(createStage());
     setDropTime(1000);
     resetPlayer();
+    setScore(0);
+    setLevel(1);
+    setRows(0);
     setGameOver(false);
   };
 
   const move = ({ code, repeat }: { code: string; repeat: boolean }): void => {
-    if (code === "ArrowLeft") {
-      movePlayer(-1);
-    } else if (code === "ArrowRight") {
-      movePlayer(1);
-    } else if (code === "ArrowDown") {
-      if (repeat) return;
-      setDropTime(30);
-    } else if (code === "ArrowUp") {
-      //implement later
+    if (!gameOver) {
+      if (code === "ArrowLeft") {
+        movePlayer(-1);
+      } else if (code === "ArrowRight") {
+        movePlayer(1);
+      } else if (code === "ArrowDown") {
+        if (repeat) return;
+        setDropTime(30);
+      } else if (code === "ArrowUp" || code === "Space") {
+        playerRotate(stage);
+      }
     }
   };
 
   const drop = (): void => {
-    updatePlayerPos({ x: 0, y: 1, collided: false });
+    if (!gameOver) {
+      if (rows > level * 10) {
+        setLevel((prev) => prev + 1);
+        //also increase speed
+        setDropTime(1000 / level + 200);
+      }
+    }
+    //increase level when player has cleared 10 rows
+
+    if (!isColliding(player, stage, { x: 0, y: 1 })) {
+      updatePlayerPos({ x: 0, y: 1, collided: false });
+    } else {
+      //game over!
+      if (player.pos.y < 1) {
+        console.log("Game over!");
+        setGameOver(true);
+        setDropTime(null);
+      }
+      updatePlayerPos({ x: 0, y: 0, collided: true });
+    }
   };
 
   useInterval(() => {
@@ -80,9 +109,9 @@ const App: React.FC = () => {
             </>
           ) : (
             <>
-              <Display text='Score: ' />
-              <Display text='Rows: ' />
-              <Display text='Level: ' />
+              <Display text={`Score: ${score}`} />
+              <Display text={`Rows: ${rows}`} />
+              <Display text={`Level: ${level}`} />
             </>
           )}
         </div>
